@@ -1,0 +1,2097 @@
+// D2JSP 0.31, MarsMephistoScript.d2j
+//====================================================================
+// Mephisto Bot Script for Orb/Nova Sorceress, with Snagit
+var mbm_version = "0.99c";
+// Author: Brand.X
+// Thanks to LordOfMars, Fruitbar, Scavenger, and HPB_Forever FuQ_Serotonin
+//
+// Original File Header:
+//
+// D2JSP Beta 19, MarsMephistoScript.d2j
+//====================================================================
+// Mephisto Bot Script for ANY Sorceress, version 0.6
+// Authors: LordOfMars and FruitBar
+// Extra thanks to nJaguar, Sydasti and Smoke
+
+// Edit the function below to set which character script is
+// loaded for each character
+
+// Spells
+const ENERGYSHIELD="Energy Shield";
+const THUNDERSTORM="Thunder Storm";
+const STATICFIELD="Static Field";
+const NOVA="Nova";
+const FROZENORB="Frozen Orb";
+const TELEPORT="Teleport";
+const ENCHANT="Enchant";
+const BLIZZARD="Blizzard";
+const FIREWALL="Fire Wall";
+const METEOR="Meteor";
+const HYDRA="Hydra";
+const CHILLINGARMOR="Chilling Armor";
+const SHIVERARMOR="Shiver Armor";
+const FROZENARMOR="Frozen Armor";
+const TELEKINESIS="Telekinesis";
+const GLACIALSPIKE="Glacial Spike";
+const ICEBLAST="Ice Blast";
+const ICEBOLT="Ice Bolt";
+const CHARGEDBOLT="Charged Bolt";
+const FIREBALL="Fire Ball";
+const FIREBOLT="Fire Bolt";
+const FROSTNOVA="Frost Nova";
+
+// Other
+const STASH="bank";
+const WAYPOINT="waypoint";
+const PORTAL="portal";
+
+/*ææææææææææææææææææææææææææææ
+Character Script Selection:
+ææææææææææææææææææææææææææææ*/
+
+print("loading MBM_libs.. credits Brand.X LordOfMars FruitBar HPB_Forever scavenger Mattlant Syadasti bluemind");
+
+include("auto_3cube1.d2l");
+include("mbm/Sy_Constants.d2l");
+include("MBM_Settings.d2l");
+include("mbm/MBM_Include.d2l");
+include("mbm/MBM_Sorc.d2l");
+include("mbm/MBM_Logging.d2l");
+// print("loading snagit libs by bluemind/HolyCoitus/HPB_Forever");
+include("mbm/MBM_SnagIt.d2l");
+
+
+if (UseMLPathing)
+{
+	// print("Loading Mattlant's perfect pathing library..");
+	include("mbm/MBM_mlMap.d2l");
+} else {
+	include("mbm/mlHeap.d2l");
+}
+
+/*ææææææææææææææææææææææææææææææææææææææææææææææææ
+Global Variables - Advanced users only!
+ææææææææææææææææææææææææææææææææææææææææææææææææ*/
+// debuglevel=0/1/2/3		0 = none, 1 = to logfile, 2 = to screen, 3 = to both
+
+var debuglevel=2;
+var debuglog="MarsMephistoScript.log";
+
+var target=null;
+var position="start";
+
+var tempx=0;
+var tempy=0;
+
+var teledistance = 33; 		// Max Distance for a single teleport
+var teldelay=400;		// Teleport delay
+var dodgewalking=false;
+var teldelayadd = 0;
+
+var rooms=new Array();
+var roomsx=new Array();
+var roomsy=new Array();
+var roomsvisited=new Array();
+var numrooms=0;
+
+var stairs=-1;
+var stairsroom=0;
+
+var mephpath=new Array(30);
+for (mp = 0; mp < 30; mp++)
+{
+	mephpath[mp]=new Array(0,0,0);
+}
+
+var healname, repairname, revivename;			// NPC names
+var lastcount=0;
+var wp;
+var d;
+
+/*ææææææææææææææææææææææææææææææææææææææææææææææææ
+FUNCTIONS:
+ææææææææææææææææææææææææææææææææææææææææææææææææ*/
+
+
+/*ææææææææææææææææææææææææææææ
+Credits
+ææææææææææææææææææææææææææææ*/
+
+function credits()
+{
+	if (l_total < 10 || l_kills < 5) {
+		print("ÿc@--------------------------------------------------------------------------------");
+		print("ÿc8D2JSP Mephisto Script with Snagit!!!  Version " + mbm_version);
+		print("ÿc9Script by LordOfMars, HolyCoitus, Brand.X, and HPB_Forever ");
+		print("ÿc7Credit to Scavenger, Mattlant, Blue Mind, IProto, Syadasti, Smoke, FuQ_Serotonin");
+	//	print("ÿc7Extra thanks to Syadasti and Smoke");
+	//	print("ÿc8bmpwnit By BlueMind.");
+	//	print("ÿc1D2JSP.d2h core created and coded by nJaguar!");
+		print("ÿc@--------------------------------------------------------------------------------");
+	} else {
+		print("ÿc9D2JSP Mephisto Script with Snagit!!!  Version " + mbm_version);
+		print("ÿc8" + (Math.round((l_kills / l_total) * 10000)/100) + "% success rate over " + l_total + " runs. Average run " + (Math.floor((TotalRunTime/l_kills)/100)/10) + " seconds, last run " + RunTimer + " ms, Best Run " + l_time + " ms");
+	}
+}
+
+function mbm_CheckVersion()
+{
+	if (me.version < 0.30) {
+		print("ÿc1This script is only compatible with D2JSP version 0.30 or higher");
+		delay(200);
+		print("ÿc7Please upgrade to 0.30 found at www.d2jsp.org");
+		while (1) delay(10000);
+		quit();
+	}
+}
+
+/*ææææææææææææææææææææææææææææ
+Event triggers
+ææææææææææææææææææææææææææææ*/
+
+/* roguechange and checkact: portions taken from PwnagePindle.d2l */
+function roguechange()
+{
+	waypoint=getUnit(2, "Waypoint");
+	i=0;
+	while(!waypoint)
+	{
+		DoDel(100);
+		waypoint=getUnit(2, "Waypoint");
+		i++
+		if(i>=100) mbm_abortmessage("Unable to find waypoint!");
+	}
+
+	if (waypoint.x - me.x == 26 && waypoint.y - me.y == -19)
+	{
+		walkto(me.x + 16, me.y + -1);
+		walkto(me.x + 8, me.y + -15);
+	} else if (waypoint.x - me.x == 21 && waypoint.y - me.y == -24)
+	{
+		walkto(me.x + 1, me.y + -16);
+		walkto(me.x + 16, me.y + -5);
+	} else if (waypoint.x - me.x == -19 && waypoint.y - me.y == -29)
+	{
+		walkto(me.x + -5, me.y + -12);
+		walkto(me.x + -13, me.y + -16);
+	} else if (waypoint.x - me.x == -14 && waypoint.y - me.y == -29)
+	{
+		walkto(me.x + -2, me.y + -14);
+		walkto(me.x + -12, me.y + -15);
+	} else mbm_abortmessage("We had an error.  I wonder what I did wrong?");
+}
+
+function TakeWaypoint(dest, destact)
+{
+	var oldarea = me.area;
+	var oldact = me.act;
+	var timeout = 0;
+	var maxtime = (destact && oldact != destact) ? ActChangeTimeout : AreaChangeTimeout;
+	
+	wp = getUnit(2, WAYPOINT);
+	if (!wp) mbm_abortmessage("Waypoint not detected");
+	
+	wp.interact(dest);
+	
+	for (var timeout = 0; me.area == oldarea && timeout < maxtime; timeout += 100) {
+		delay(100);
+	}
+
+	var tries = 1;
+	if (me.area == oldarea) do {
+		
+		me.move(wp.x, wp.y);
+		delay(200);
+	
+		print("(" + tries + ") Interacting with waypoint");
+		wp.interact(dest);
+	
+		for (timeout = 0; me.area == oldarea && timeout < maxtime; timeout += 100) {
+			delay(100);
+		}
+		
+		if (me.area != oldarea)
+			break;
+		
+	} while (tries++ <= 3);
+	
+	if (me.area == oldarea) mbm_abortmessage("Take waypoint timeout, maybe you don't have the waypoint");
+
+	delay(WPDelay);
+
+	// This is a hack only, should be a generalized detection of changing acts
+	for (; timeout < maxtime; timeout += 160) {
+		delay(80);
+		if (me.state == 5) break;
+
+		delay(80);
+		if (me.state == 1) break;;
+		
+	}
+
+	// print("timeout: " + timeout + " maxtime: " + maxtime + " me.state: " + me.state);
+	// print("state= " + me.state);
+
+	// This is a hack, delay more for people without Thunderstorm
+	if (!tsp) delay(600 + me.ping);	
+}
+
+function checkact()
+{
+	if (me.act == 1 || me.act == 2 || me.act == 5) {
+		print("You are not in act 3!  Going from act #" + me.act + " to act #3");
+		me.overhead("Changing acts");
+		
+		switch (me.act)
+		{
+			case 1: roguechange(); break;
+			case 2:
+				walkto(5127, 5175);
+				walkto(5120, 5133);
+				walkto(5094, 5113);
+				walkto(5069, 5086);
+				break;
+			case 5:	walkto(5113, 5068); break;
+		}
+
+		TakeWaypoint(c_WaypointIDs[2][0], 3);
+		position="waypoint";
+	} else {
+		position="start";
+	}
+	
+	while (!me.act || me.act < 1 || me.act > 5)
+		delay(50);
+	
+	if (me.act == 3) {
+		healname = ORMUS;
+		repairname = HRATLI;
+		revivename = ASHEARA;
+	} else if (me.act == 4) {
+		healname = JAMELLA;
+		repairname = HALBU;
+		revivename = TYRAEL;
+	} else {
+		mbm_abortmessage("Unknown act");
+	}
+}
+
+function potioncomp(pota, potb)
+{
+	print(parseInt(pota.charAt(2)),parseInt(potb.charAt(2)));
+	return parseInt(pota.charAt(2)) - parseInt(potb.charAt(2));
+}
+
+function potioncount()
+{
+	var cnt = 0;
+	
+	for (var pot = 0; pot < GoodPots.length; pot++) {
+		cnt += countitem(GoodPots[pot], 2);
+	}
+	
+	nextpot:
+	for (var pot = 0; pot < DontDrinkPots.length; pot++) {
+		for (var otherpot = 0; otherpot < GoodPots.length; otherpot++) {
+			if (DontDrinkPots[pot] == GoodPots[otherpot]) break nextpot;
+		}
+		cnt += countitem(DontDrinkPots[pot], 2);
+	}
+	
+	return cnt;
+}
+
+function scrollcount()
+{
+	var tome = locateitem(me, "tbk", 100);
+	if (!tome) {
+		return 0;
+	} else {
+		return (tome.getStat(70));
+	}
+}
+
+function keycount()
+{
+	var key = locateitem(me, "key", 100);
+	return key ? key.getStat(70) : 0;
+}
+
+function checkclass()
+{
+	if (me.classid == 0) classname="Amazon";
+	if (me.classid == 1) classname="Sorceress";
+	if (me.classid == 2) classname="Necromancer";
+	if (me.classid == 3) classname="Paladin";
+	if (me.classid == 4) classname="Barbarian";
+	if (me.classid == 5) classname="Druid";
+	if (me.classid == 6) classname="Assassin";
+
+	me.overhead("I am a " + classname + "!");
+	if (debuglevel > 1) delay(250);
+
+	if (me.classid == 1)
+	{
+//		print(classname + " detected!");
+//		if (debuglevel > 1) delay(250);
+		return;
+	}
+	if (me.classid != 1)
+	{
+		print(classname + " detected!");
+		delay(1000);
+		print("This class is not supported!");
+		delay(1000);
+		print("Halting script...");
+		delay(4000);
+		quit();
+	}
+}
+
+function mbm_potname(pot)
+{
+	switch (pot) {
+		case "hp1": return "Minor Healing Potion";
+		case "hp2": return "Light Healing Potion";
+		case "hp3": return "Healing Potion";
+		case "hp4": return "Greater Healing Potion";
+		case "hp5": return "Super Healing Potion";
+		case "mp1": return "Minor Mana Potion";
+		case "mp2": return "Light Mana Potion";
+		case "mp3": return "Mana Potion";
+		case "mp4": return "Greater Mana Potion";
+		case "mp5": return "Super Mana Potion";
+		case "rvs": return "Rejuvination Potion";
+		case "rvl": return "Full Rejuvination Potion";
+		default: return "Unknown potion";
+	}
+}
+
+function managepotions()
+{
+	var allpots = ["hp1","hp2","hp3","hp4","hp5","mp1","mp2","mp3","mp4","mp5","rvs","rvl"];
+
+	if (usepotions)
+	{
+		nextpot:
+		for (var pot = 0; pot < allpots.length; pot++) {
+			
+			// print("checking " + allpots[pot]);
+			for (var i = 0; i < GoodPots.length; i++) {
+				if (allpots[pot] == GoodPots[i]) {
+					// print("match");
+					continue nextpot;
+				}
+			}
+			
+			// Check dont drink pots
+			for (var i = 0; i < DontDrinkPots.length; i++) {
+				if (allpots[pot] == DontDrinkPots[i]) {
+					continue nextpot;
+				}
+			}
+			// print("drinking " + allpots[pot]);
+			drinkall(allpots[pot], -1, mbm_potname(allpots[pot]));
+		}
+
+		if (idied)
+		{
+			for (var pot = 0; pot < GoodPots.length; pot++) {
+				dropall(GoodPots[pot], 100, mbm_potname(GoodPots[pot]));
+			}
+
+			delay(1000);
+
+			for (var pot = 0; pot < GoodPots.length; pot++) {
+				pickupall(GoodPots[pot], mbm_potname(GoodPots[pot]), potionpickuprange);
+			}
+				
+		}
+		
+		for (var pot = 0; pot < GoodPots.length; pot++) {
+			drinkall(GoodPots[pot], 100, mbm_potname(GoodPots[pot]));
+		}
+	}
+
+	if (!usepotions && idied)
+	{
+		for (var pot = 0; pot < allpots.length; pot++) {
+			dropall(allpots[pot], 100, mbm_potname(allpots[pot]));
+		}
+
+		delay(1000);
+
+		for (var pot = 0; pot < allpots.length; pot++) {
+			pickupall(allpots[pot], mbm_potname(allpots[pot]), potionpickuprange);
+		}
+	}
+}
+
+function pickuppotions()
+{
+	for (var pot = 0; pot < GoodPots.length; pot++)
+		pickupall(GoodPots[pot], mbm_potname(GoodPots[pot]), potionpickuprange);
+}
+
+// mbm_checkbelt
+//   checks for an empty potion column.
+//   if there is one we need to buy more potions.
+//
+
+function mbm_AutoPotions()
+{
+	if (me.diff == 2) {
+		BuyPotion="hp5";
+	} else if (me.diff == 1) {
+		BuyPotion="hp4";
+	} else {
+		if (me.act == 4)
+			BuyPotion="hp4";
+		else
+			BuyPotion="hp3";
+	}
+
+	mbm_print("Buying potion is " + BuyPotion);
+
+	// Make sure that the "buy" potion is in the dont drink list
+	for (var i = parseInt(BuyPotion.charAt(2)); i <= 5; i++) {
+		DontDrinkPots.push("hp"+i);
+	}
+
+}
+
+function mbm_checkbelt()
+{
+//	var beltcols = new Array();
+//	beltcols[0] = true;
+//	beltcols[1] = true;
+//	beltcols[2] = true;
+//	beltcols[3] = true;
+	
+//	item = getUnit(4, null, 2);
+//	if (item) do {
+//		print("item's location: " + item.x + " " + item.y);
+//	} while (item.getNext(null, 2));
+	
+//	if (beltcols[0] || beltcols[1] || beltcols[2] || beltcols[3]) {
+//		print("Need healing potions");
+//		needheal = true;
+//	}
+	
+	// Use drinkBeltPotion if it is available
+//	for (i = 0; i < 4; i++) {
+//		if (drinkBeltPotion(i, 2) == 0) {
+//			print("Need healing potions");
+//			needheal = true;
+//			break;
+//		}
+//	}
+
+	// Autodetect buy potion type
+	mbm_AutoPotions();
+
+	if (potioncount() < MinPots) {
+		print("Need healing potions");
+		needpotions = true;
+	} else {
+		needpotions = false;
+	}
+
+	if (!needheal && !needpotions)
+		print("Don't need healing potions");
+}
+
+function mbm_checktomes()
+{
+	needtps = false;
+	needtptome = false;
+	
+	// Only use tomes if we are doing the chicken to town mode
+	if (BuyTPTome) {
+		
+		// Try to find a town portal scroll in inventory
+		tome = locateitem(me, "tbk", 100);
+		if (!tome) {
+			print("Need to buy a town portal tome");
+			needtptome = true;
+			needtps = true;
+		} else {
+			if (tome.getStat(c_UnitStat_Quantity) < LowTPCount) {
+				needtps = true;
+				print("Need to buy town portal scrolls");
+			}
+		}
+	}
+}
+
+// Check if we need keys
+function mbm_checkkeys(athealer)
+{
+	var count = keycount();
+	
+	needkeys = false;
+	
+	if (count == 0) {
+		if ((me.act == 4 && athealer) || (me.act == 3 && !athealer)) {
+			print("Need to buy keys!");
+			needkeys = true;
+		}
+	} else if (count == 1 && athealer) {
+		print("Need to buy keys!");
+		needkeys = true;
+	}
+	
+	// Dont need keys	
+}
+
+function mbm_checksell()
+{
+	needsell = false;
+	
+	var invitem = getUnit(4);
+	if (invitem) do {
+		if (mbm_IsInvItem(invitem)) {
+			if (mbm_IsMoneyItem(invitem)) {
+				needsell = true;
+				print("Need to sell items at " + healname);
+				break;
+			}
+		}
+	} while (invitem.getNext());
+	
+	
+	return needsell;
+}
+
+
+function mephistotaunt()
+{
+	if (taunts)
+	{
+		mtaunt = parseInt(Math.random() * 11);
+	
+		if (mtaunt == 0) print("ÿc4Mephistoÿc@: You there yet?");
+		if (mtaunt == 1) print("ÿc4Mephistoÿc@: You coming?");
+		if (mtaunt == 2) print("ÿc4Mephistoÿc@: I bet you're chicken!");
+		if (mtaunt == 3) print("ÿc4Mephistoÿc@: I got a little something for ya...");
+		if (mtaunt == 4) print("ÿc4Mephistoÿc@: Bring it beotch!");
+		if (mtaunt == 5) print("ÿc4Mephistoÿc@: Does the little girl want to play...?");
+		if (mtaunt == 6) print("ÿc4Mephistoÿc@: You ain't got the guts...");
+		if (mtaunt == 7) print("ÿc4Mephistoÿc@: I'm gonna pwn your a$$!!!");
+		if (mtaunt == 8) print("ÿc4Mephistoÿc@: Come give us a little kiss!");
+		if (mtaunt == 9) print("ÿc4Mephistoÿc@: Whats takin you so long?");
+		if (mtaunt >= 10) print("ÿc4Mephistoÿc@: I am the Alpha and the Omega!!!");
+	}
+}
+
+
+/*ææææææææææææææææææææææææææææ
+Paths
+ææææææææææææææææææææææææææææ*/
+
+function teleporttomeph()
+{
+	if (taunts) mephistotaunt();
+	/*me.overhead("Teleporting to Mephisto");
+	mbm_teleportto(17677, 8030);
+	me.overhead("Teleporting to Mephisto");
+	mbm_teleportto(17650, 8030);
+	me.overhead("Teleporting to Mephisto");
+	mbm_teleportto(17636, 8030);
+	me.overhead("Teleporting to Mephisto");
+	mbm_teleportto(17618, 8040);
+	me.overhead("Teleporting to Mephisto");
+	mbm_teleportto(17600, 8052);
+	me.overhead("Teleporting to Mephisto");
+	mbm_teleportto(17590, 8068);
+	*/
+	mbm_teleportto(17679, 8043);
+        aa= getNPC("Bremm sparkfist");
+        if(!aa){print("###%^^&&*");quit();}
+        if (Dist(aa.x,aa.y,17650,8054)<20 || Dist(aa.x,aa.y,17637,8070)<20 || 
+            Dist(aa.x,aa.y,17620,8070)<16 || Dist(aa.x,aa.y,17652,8085)<20)
+       {
+              me.overhead("1 line");
+	      say("sig PostString Teleporting to Mephisto use line 1");
+	      
+	      //teleportto(17650, 8030);
+	      mbm_teleportto(17636, 8030);
+	      mbm_teleportto(17618, 8040);
+	      mbm_teleportto(17600, 8052);
+	      mbm_teleportto(17588, 8068);
+       }
+       else
+       {
+       if(Dist(aa.x,aa.y,17636,8042)<25 && Dist(aa.x,aa.y,17612,8046)<25)
+       {
+              me.overhead("2 line");
+              say("sig PostString Teleporting to Mephisto use line 2");
+              
+              //teleportto(17679,8043);
+              mbm_teleportto(17647,8045);
+              mbm_teleportto(17627,8069);
+              mbm_teleportto(17588,8068);
+        }
+        else {print("I can't find line!sorry@@");quit();}
+        }
+	
+	// This is the post-pre meph manager
+	mbm_CheckConviction();
+	// Load the map of durance three
+	if (DodgeMode == 2)
+		mbm_LoadDuranceThreeMap();
+
+	me.overhead("Teleporting to Mephisto");
+	mbm_teleportto(17562, 8069);
+}
+
+function teleporttoentrace()
+{
+	if (taunts) mephistotaunt();
+	me.overhead("Fleeing to Stairs");
+	walkto(17562, 8069);
+	me.overhead("Fleeing to Stairs");
+	walkto(17590, 8068);
+	me.overhead("Fleeing to Stairs");
+	mbm_teleportto(17600, 8052);
+	me.overhead("Fleeing to Stairs");
+	walkto(17618, 8040);
+	me.overhead("Fleeing to Stairs");
+	walkto(17636, 8030);
+	me.overhead("Fleeing to Stairs");
+	walkto(17650, 8030);
+	me.overhead("Fleeing to Stairs");
+	mbm_teleportto(17677, 8030);
+	walkto(17693, 8022);
+}
+
+
+function takeactfourportal()
+{
+	me.overhead("Teleporting to Portal");
+	mbm_teleportto(17562, 8069);
+	me.overhead("Teleporting to Portal");
+	mbm_teleportto(17590, 8068);
+	// Wait for bridge
+	delay(RedPortalBridgeDelay);
+	portal = getUnit(2, PORTAL);
+	if (portal) do {
+		if (portal.classid == 342)
+			break;
+	} while (portal.getNext());
+	if (!portal) mbm_abortmessage("Red Portal Not found");
+
+	if (portal)
+	{
+		print("Red Portal detected!");
+		for (p = 1; p <= portaltries; p++)
+		{
+			me.overhead("Teleporting to Portal");
+			mbm_teleportto(portal.x-2, portal.y);
+
+			if (mbm_TakePortal(portal)) {
+				mbm_print("Take Red Portal successful!");
+				return true;
+			}
+
+			print("("+p+") Taking red portal..");
+			delay(200);
+		}
+		mbm_abortmessage("Red Portal failed!");
+	}
+
+}
+
+function mbm_TakePortal(portal)
+{
+	var oldarea = me.area;
+
+	print("Entering portal...");
+	
+	me.move(portal.x, portal.y);
+	for (var x = 0; x < 5 && calcrange(portal.x, portal.y) >= PortalMinDist; x++) {
+		delay(100);
+	}
+
+	if (calcrange(portal.x, portal.y) > PortalMinDist) {
+		print("Too far from portal! Trying again.");
+		return false;
+	}
+			
+	portal.interact();
+	for (d = 0; d < ActChangeTimeout; d += 100) {
+		delay(100);
+		if (me.area != oldarea)
+			break;
+	}
+
+	return (me.area != oldarea);
+}
+
+/*ææææææææææææææææææææææææææææ
+Mephisto!!!
+ææææææææææææææææææææææææææææ*/
+
+//var PathTests = 5;
+
+function teleporttodurancethree_ml()
+{
+//	for (var qqqq = 0; qqqq < PathTests; qqqq++) {
+	
+//	delay(1000);
+	
+	var start = new Date().getTime();
+	var end;
+	
+	// Find the location of the stairs
+	scanrooms();
+	for (i = 0; i < rooms.length; i++)
+	{
+		if (rooms[i] > 787 && rooms[i] < 792)
+		{
+			mbm_print("stairs found");
+			stairs = i;
+		}
+	}
+	if (stairs == -1) mbm_abortmessage("Unable to find Stairs!");
+	
+	// print("Stair xy: " + p2s({x:roomsx[stairs], y:roomsy[stairs]}));
+	
+	durance = new oMap(false, false);
+	if (!durance)
+		mbm_abortmessage("Error creating mlMap object");
+		
+	durance.InitializeMap();
+//	durance.InitializeRooms();
+	if (durance.LastError) {
+		mbm_abortmessage("Error initializing path, aborting. Reason: " + mlReason);
+	}		
+
+	delay(20);
+
+//	var alpha = PathingVarAlpha;
+//	var beta = PathingVarBeta;
+	var alpha = PathingPointTries;
+	var beta = PathingPoints;
+
+	var ret = durance.FindSorcPath2(me.x, me.y, roomsx[stairs], roomsy[stairs], teledistance, AcceptablePathingError, alpha, beta, mlASTAR);
+
+	if (durance.LastError) {
+		mbm_abortmessage("We couldnt find a path, aborting. Reason: " + durance.LastError);
+	} else if (!ret) {
+		mbm_abortmessage("Error finding path: if this happens consistently set UseMLPathing=false");
+	}
+
+	end = new Date().getTime();
+	print("Path has " + (durance.Path.length-1) + " points, generated in " + (end - start) + " ms");
+//	}
+	for (var i = 1; i < durance.Path.length; i++) {
+
+		stairs = getUnit(5, 67);
+		if (!stairs) stairs = getUnit(5, 68);
+		if (stairs) {
+			if (calcrange(stairs.x, stairs.y) < teledistance)
+				return true;
+		}
+		
+//		print(i + "] " + p2s(durance.Path[i]));
+		mbm_teleportto(durance.Path[i].x, durance.Path[i].y);
+
+//		var ok = false;
+//		for (var j = 0; j < 4; j++) {
+//			if (teleporttest(durance.Path[i].x, durance.Path[i].y, true)) {
+//				ok = true;
+//				break;
+//			}
+//		}
+
+//		if (!ok) {
+///			mbm_abortmessage("Teleport to stairs deviated from path or lagging bad :(");
+//		}
+
+		mbm_TriBar("Teleporting to Stairs", i, (durance.Path.length - 2), "ÿc1");
+//		delay(500);
+//		print("my position: " + p2s(me) + " dist=" + calcrange(durance.Path[i].x, durance.Path[i].y));
+//		delay(300);
+	}
+	
+//	durance.ReleaseRooms();
+	
+//	durance.PathMove(durance.Path, null, null, TeleportDist, mlASTAR, 2);
+
+//	if (durance.LastError) {
+//		mbm_abortmessage("we didnt make it, aborting. Reason: " + mlReason);
+//	}
+}
+
+function teleporttodurancethree()
+{
+	if (UseMLPathing)
+	{
+		teleporttodurancethree_ml();
+/*		delay(2000);
+		teleporttodurancethree_ml();
+		delay(2000);
+		teleporttodurancethree_ml();
+		delay(2000);
+		teleporttodurancethree_ml();
+		delay(2000);
+		teleporttodurancethree_ml();
+		delay(2000);*/
+	}
+	else
+	{
+		scanrooms();
+		for (i = 0; i < rooms.length; i++)
+		{
+			if (rooms[i] > 787 && rooms[i] < 792)
+			{
+				mbm_print("stairs found");
+				stairs = i;
+			}
+		}
+		if (stairs == -1) mbm_abortmessage("Unable to find Stairs!");
+	
+		mbm_print("Calculating path...");
+
+		path = calcshortestpath(roomsx[stairs], roomsy[stairs]);
+		teleportmephpath();
+//		delay(500);
+	}
+
+	mbm_TakeStairs();
+}
+
+function scanrooms()
+{
+	room = getRoom(); 
+	if (room) 
+	do
+	{ 
+		if (room.number!=0 && (room.number<4 || room.number>15) && room.number < 2000)
+		{
+			rooms[numrooms] = room.number;
+			roomsx[numrooms] = 5*room.x + 25;
+			roomsy[numrooms] = 5*room.y + 25;
+			roomsvisited[numrooms] = false;
+			mbm_print("Room: "+numrooms+"-"+room.number+" ("+roomsx[numrooms]+", "+roomsy[numrooms]+")");
+			numrooms++;
+		} 
+		else {
+			mbm_print("wierd room");
+		}
+	}
+	while (room.getNext());
+	  
+	mbm_print("---");
+}
+
+function calcshortestpath(targetx, targety, maxdist)
+{
+	pathlength = 0;
+	var finished = false;
+	var success = false;
+
+	mbm_print("Trying to get to (" + targetx + ", " + targety + ")" + ", Distance: " +
+		calcdistance(me.x,me.y,roomsx[stairs],roomsy[stairs]));
+	mbm_print("Position is " + pathlength);
+	
+	mephpath[0][0] = me.x;
+	mephpath[0][1] = me.y;
+	mephpath[0][2] = -1;
+
+	do
+	{
+		nextpoint = findnextpoint(mephpath[pathlength][0],mephpath[pathlength][1],maxdist,pathlength);
+		if (nextpoint != -1)
+		{
+			pathlength += 1;
+			mbm_print("Next room is: " + rooms[nextpoint] + ", Dist to stairs: " + 
+				calcdistance(roomsx[nextpoint],roomsy[nextpoint],roomsx[stairs],roomsy[stairs]));
+			mbm_print("Position is " + pathlength);
+			mephpath[pathlength][0] = roomsx[nextpoint];
+			mephpath[pathlength][1] = roomsy[nextpoint];
+			mephpath[pathlength][2] = rooms[nextpoint];
+			if (rooms[nextpoint] > 787 && rooms[nextpoint] < 792)
+			{
+				mbm_print(rooms[nextpoint] + " is the stairs room!");
+				finished = true;
+				success = true;
+			}
+		}
+		if (nextpoint == -1)
+		{
+			if (pathlength == 0)
+			{
+				finished = true;
+			}
+			pathlength -= 1;
+			mbm_print("Backing up a step, Position is " + pathlength);
+		}		
+	}
+	while (!finished);
+	
+	if (finished && success) return;
+	if (finished && !success)
+	{
+		debuglevel = 1;
+		mbm_print("Calc Shortest Path failed!");
+		mbm_abortmessage("Calc Shortest Path failed!");
+	}
+}
+
+function findnextpoint(x,y,pos)
+{
+	bestroom = -1;
+	bestdist = 1000;
+
+	for (i = 0; i < rooms.length ; i++)
+	{
+		if (!roomsvisited[i])
+		{
+			curxydiff = calcxydifference(x, y, roomsx[i], roomsy[i]);
+			curdist = calcdistance(roomsx[i],roomsy[i],roomsx[stairs],roomsy[stairs]);
+
+			tempstring = ("Trying room number " + rooms[i]);
+			tempstring += (", Dist to stairs: " + curdist);
+			tempstring += (", Dist from cur pos: " + curxydiff);
+			mbm_print(tempstring);
+
+			if (curxydiff < 61 && curdist < bestdist)
+			{
+				bestroom = i;
+				bestdist = curdist;
+
+				tempstring = ("Best room is: " + rooms[bestroom]);
+				tempstring += (", Dist to stairs: " + bestdist);
+				tempstring += (", Dist from cur pos: " + curxydiff);
+				mbm_print(tempstring);
+			}
+		}
+	}
+	if (bestroom == -1 && pos == 0)
+	{
+		for (i = 0; i < rooms.length ; i++)
+		{
+			if (!roomsvisited[i])
+			{
+				curxydiff = calcxydifference(x, y, roomsx[i], roomsy[i]);
+				curdist = calcdistance(roomsx[i],roomsy[i],roomsx[stairs],roomsy[stairs]);
+
+				tempstring = ("Trying room number " + rooms[i]);
+				tempstring += (", Dist to stairs: " + curdist);
+				tempstring += (", Dist from cur pos: " + curxydiff);
+				mbm_print(tempstring);
+
+				if (curxydiff < 121 && curdist < bestdist)
+				{
+					bestroom = i;
+					bestdist = curdist;
+	
+					tempstring = ("Best room is: " + rooms[bestroom]);
+					tempstring += (", Dist to stairs: " + bestdist);
+					tempstring += (", Dist from cur pos: " + curxydiff);
+					mbm_print(tempstring);
+				}
+			}
+		}
+	}
+	if (bestroom != -1) roomsvisited[bestroom] = true;
+	return bestroom;
+}
+
+function walkdodgeto(x, y)
+{
+	var startX = me.x;
+	var startY = me.y;
+	var currDestX = x;
+	var currDestY = y;
+	var trys = 0;
+	
+	dodgewalking = true;
+
+	mbm_print("Dodge walking to [" + x + ", " + y + "]");
+
+	while ((Math.abs(me.x - x) >= 4 || Math.abs(me.y - y) >= 4) && trys <= 10)
+	{
+		me.move(currDestX, currDestY);
+		delay(250);
+		checkdodge();
+		if (me.x == startX && me.y == startY)
+		{
+			var direction = rnd(0,314)/100;
+			currDestX = Math.floor(Math.sin(direction))*20 + me.x;
+			currDestY = Math.floor(Math.cos(direction))*20 + me.y;
+			trys++;
+		}
+		else
+		{
+			startX = me.x;
+			startY = me.y;
+			currDestX = x;
+			currDestY = y;
+			trys = 0;
+		}
+	}
+	
+	dodgewalking = false;
+	if (Math.abs(me.x - x) <= 4 || Math.abs(me.y - y) <= 4) return(false);
+}
+
+function teleportdodge(x, y)
+{
+	if (me.mp < 30) // Not enough mana to teleport dodge
+		walkto(x, y);
+
+	if (!mbm_SetSkill(TELEPORT, right_hand))
+		mbm_abortmessage("Error setting skill to teleport");
+	
+//	for (tt = 1; tt <= 2; tt++)
+//	{
+		me.useSkillAt(x, y,right_hand);
+		delay(teldelay);
+//		if ((Math.abs(me.x - x) < 5) && (Math.abs(me.y - y) < 5)) 
+//		{
+//			return;
+//		}
+//	}
+}
+
+function teleporttest(x, y, over)
+{
+	var teldelay2;
+	
+	if (!mbm_SetSkill(TELEPORT,right_hand)) {
+		bug("Couldn't switch skill to teleport");
+	}
+
+	for (tt = 1; tt <= 3; tt++)
+	{
+		if (!over) me.overhead("Teleporting to Stairs");
+		
+		me.useSkillAt(x, y,right_hand);
+		
+		teldelay2 = Math.min(me.ping + me.ping, 1000);
+		if (teldelay2 < teldelay) teldelay2 = teldelay;
+		delay(teldelay2);
+
+		// Check to see see if we have arrived at our destination
+		if ((Math.abs(me.x - x) < 10) && (Math.abs(me.y - y) < 10)) 
+		{
+			mbm_print("Teleported to [" + me.x + ", " + me.y + "]");
+			return true;
+		} else {
+			teldeladd += 25;
+			if (teldeladd < 1000) 
+			{
+				teldelay += 25;
+				print("Teleport delay increased by 25ms");
+			}
+		}
+	}
+	return false;
+}
+
+function teleportmephpath()
+{
+	for (zx = 1; zx <= pathlength; zx++)
+	{
+		mbm_print("Teleporting to room: " + mephpath[zx][2]);
+
+		tx = mephpath[zx][0];
+		ty = mephpath[zx][1];
+		var arrived = false;
+		while (arrived == false)
+		{
+			if (calcdistance(me.x, me.y, tx, ty) > teledistance)
+			{
+				tempx = parseInt(me.x + (tx - me.x) * teledistance / calcdistance(me.x, me.y, tx, ty));
+				tempy = parseInt(me.y + (ty - me.y) * teledistance / calcdistance(me.x, me.y, tx, ty));
+
+				teletry = teleporttest(tempx, tempy);
+				if (!teletry)
+				{
+					tempx = parseInt((Math.random() * 30) - 15);
+					if (tempx > 0) tempx += 5;
+					if (tempx < 0) tempx -= 5;
+					tempy = parseInt((Math.random() * 30) - 15);
+					if (tempy > 0) tempy += 5;
+					if (tempy < 0) tempy -= 5;
+					if (tempx == 0) tempx = rnd(0,30) - 15;
+					if (tempy == 0) tempy = rnd(0,30) - 15;
+					if (tempx == 0 && tempy == 0) {
+						mbm_abortmessage("bizzare all zero random values");
+					}
+					print("Random teleport [" + tempx + "," + tempy + "]");
+					tempx = (me.x + tempx);
+					tempy = (me.y + tempy);
+					teleporttest(tempx,tempy);
+				}
+			}
+			else
+			{
+				teletry = teleporttest(tx, ty);
+				if (!teletry)
+				{
+					tempx = parseInt((Math.random() * 30) - 15);
+					if (tempx > 0) tempx += 5;
+					if (tempx < 0) tempx -= 5;
+					tempy = parseInt((Math.random() * 30) - 15);
+					if (tempy > 0) tempy += 5;
+					if (tempy < 0) tempy -= 5;
+					print("Random teleport [" + tempx + "," + tempy + "]");
+					tempx = (me.x + tempx);
+					tempy = (me.y + tempy);
+					teleporttest(tempx,tempy);
+				}
+			}
+			if ((Math.abs(me.x - tx) < 10) && (Math.abs(me.y - ty) < 10))
+			{
+				mbm_print("Arrived at room: " + mephpath[zx][2]);
+				arrived = true;
+			}
+		}
+	}
+}
+
+function mbm_TakeStairs()
+{
+	
+	// get the entrance to the place
+	stairs = getUnit(5, 67);
+	if (!stairs) stairs = getUnit(5, 68);
+	if (!stairs) mbm_abortmessage("Unable to find stairs! Exiting");
+	me.overhead("Entering stairs");
+	
+	//sig
+	say("sig PostString Entering stairs");
+	
+	if (stairs.classid == 67) {
+//		print("range: " + calcrange(stairs.x+4, stairs.y));
+		if (calcrange(stairs.x+4, stairs.y) > 4) teleportsequence(stairs.x+4, stairs.y);
+	} else if (stairs.classid == 68) {
+//		print("range: " + calcrange(stairs.x, stairs.y + 4));
+		if (calcrange(stairs.x, stairs.y+4) > 4) teleportsequence(stairs.x, stairs.y+4);
+	}
+	me.overhead("Entering stairs");
+	me.move(stairs.x,stairs.y);
+	
+	var cnt = 0;
+	while (me.area != 102)
+	{
+		stairs.interact();
+		
+		var t=0;
+		do {
+			delay(40);
+		} while (t++ < maxtik && me.area != 102);
+		
+		if (cnt++ > 5)
+		{
+			mbm_abortmessage("Couldn't take the stairs");
+		}
+	}
+	
+}
+
+/*ææææææææææææææææææææææææææææ
+Before Waypoint
+ææææææææææææææææææææææææææææ*/
+
+// Pathing
+
+var Path_S2C = new Array();
+Path_S2C.push({x:5130, y:5163});
+Path_S2C.push({x:5133, y:5149});
+Path_S2C.push({x:5133, y:5106});
+Path_S2C.push({x:5133, y:5096});
+
+var Path_C2Ormus = new Array();
+Path_C2Ormus.push({x:5129, y:5093});
+
+var Path_C2R = new Array();
+Path_C2R.push({x:5148, y:5087});
+Path_C2R.push({x:5159, y:5087});
+
+var Path_R2Hratli = new Array();
+Path_R2Hratli.push({x:5182, y:5087});
+Path_R2Hratli.push({x:5212, y:5087});
+Path_R2Hratli.push({x:5223, y:5070});
+Path_R2Hratli.push({x:5223, y:5051});
+Path_R2Hratli.push({x:5226, y:5046});
+Path_R2Hratli.push({x:5224, y:5042});
+
+var Path_C2V = new Array();
+Path_C2V.push({x:5119, y:5092});
+Path_C2V.push({x:5109, y:5092});
+
+var Path_V2Asheara = new Array();
+Path_V2Asheara.push({x:5108, y:5092});
+Path_V2Asheara.push({x:5081, y:5092});
+Path_V2Asheara.push({x:5055, y:5092});
+Path_V2Asheara.push({x:5047, y:5095});
+
+var Path_W = ({x:5143, y:5088});
+
+var Path_Hratli2R = new Array();
+Path_Hratli2R.push({x:5224, y:5042});
+Path_Hratli2R.push({x:5226, y:5046});
+Path_Hratli2R.push({x:5223, y:5051});
+Path_Hratli2R.push({x:5223, y:5071});
+Path_Hratli2R.push({x:5211, y:5086});
+Path_Hratli2R.push({x:5204, y:5087});
+Path_Hratli2R.push({x:5182, y:5087});
+Path_Hratli2R.push({x:5158, y:5087});
+
+var Path_Asheara2V = new Array();
+Path_Asheara2V.push({x:5055, y:5092});
+Path_Asheara2V.push({x:5082, y:5092});
+Path_Asheara2V.push({x:5113, y:5092});
+
+// Walk along a path of points
+function mbm_WalkPath(path, message)
+{
+	me.overhead(message);
+	for (var pt = 0; pt < path.length; pt++) {
+		if (!walkto(path[pt].x, path[pt].y)) {
+			mbm_abortmessage("error " + message + " point " + p2s(path[pt]));
+			return false;
+		}
+		me.overhead(message);
+	}
+	
+	return true;
+}
+
+// Walk along a path backwards
+function mbm_ReversePath(path, message)
+{
+	me.overhead(message);
+	for (var pt = path.length-1; pt >= 0; pt--) {
+		if (!walkto(path[pt].x, path[pt].y)) {
+			mbm_abortmessage("error " + message + " point " + p2s(path[pt]));
+			return false;
+		}
+		me.overhead(message);
+	}
+	
+	return true;
+}
+
+
+function movetohealer()
+{
+	text = "Walking to " + healname;
+	me.overhead(text);
+	if (me.act == 3) {
+		switch (position) {
+			case "heal":		break;
+			case "start":		mbm_WalkPath(Path_S2C, text);
+						mbm_WalkPath(Path_C2Ormus, text);
+						break;
+			case "waypoint": 	walkto(5143, 5088);
+						me.overhead("Walking to " + healname);
+						walkto(5128, 5090);
+						break;
+			case "repair":		mbm_WalkPath(Path_Hratli2R, text);
+						walkto(5142, 5088);
+						break;
+			case "revive":		walkto(5054, 5092);
+						me.overhead("Walking to " + healname);
+						walkto(5111, 5093);
+						break;
+			case "stash":		walkto(5143, 5089);
+						break;
+			case "portal":		walkto(5148, 5085);
+						walkto(5142, 5089);
+						walkto(5132, 5091);
+						break;
+			default:		bug("act 3 movetohealer from " + position);
+		}
+	} else {
+		switch (position) {
+			case "heal":		break;
+			case "revive":		
+			case "stash":		
+			case "waypoint":
+			case "start":		walkto(5075, 5047);
+						walkto(5078, 5046);
+						break;
+			case "repair":		break;
+			default:		bug("act 4 movetohealer from " + position);
+		}
+	}
+	position="heal";
+}
+
+
+function movetorepair()
+{
+	text = "Walking to " + repairname;
+	me.overhead(text);
+	if (me.act == 3) {
+		switch (position) {
+			case "repair":		break;
+			case "start":		mbm_WalkPath(Path_S2C, text);
+						mbm_WalkPath(Path_C2R, text);
+						mbm_WalkPath(Path_R2Hratli, text);
+						break;
+			case "revive":		mbm_WalkPath(Path_Asheara2V, text);
+						walkto(5127, 5097);
+						walkto(5142, 5088);
+						walkto(5158, 5087);
+						mbm_WalkPath(Path_R2Hratli, text);
+						break;
+			case "heal":		walkto(5132, 5090);
+			case "stash":		
+			case "waypoint": 	walkto(5158, 5087);
+						mbm_WalkPath(Path_R2Hratli, text);
+						break;
+			default:		bug("act 3 movetorepair from " + position);
+		}
+	} else {
+		switch (position) {
+			case "repair":		break;
+			case "start":		walkto(5075, 5041);
+						break;
+			case "revive":		
+			case "stash":		
+			case "waypoint": 	walkto(5053, 5035);
+						walkto(5075, 5041);
+						break;
+			case "heal":		break;
+			default:		bug("act 4 movetorepair from " + position);
+		}
+	}
+	position="repair";
+}
+
+function movetorevive()
+{
+	var text = "Walking to " + revivename;
+	me.overhead(text);
+	if (me.act == 3) {
+		switch (position) {
+			case "revive":		break;
+			case "start":		mbm_WalkPath(Path_S2C, text);
+						walkto(5124, 5094);
+						mbm_WalkPath(Path_V2Asheara, text);						
+						break;
+			case "stash":		
+			case "waypoint": 	walkto(5143, 5088);
+						mbm_WalkPath(Path_V2Asheara, text);						
+						break;
+			case "repair":		mbm_WalkPath(Path_Hratli2R, text);
+						walkto(5143, 5088);
+						mbm_WalkPath(Path_V2Asheara, text);						
+						break;
+			case "heal":		mbm_WalkPath(Path_V2Asheara, text);
+						break;
+			default:		bug("act 3 movetorevive from " + position);
+		}
+	} else {
+		switch (position) {
+			case "revive":		break;
+			case "start":		walkto(5034, 5036);
+						break;
+			case "waypoint": 	walkto(5034, 5027);
+						break;
+			case "stash":		break;
+			case "repair":		walkto(5075, 5042);
+						walkto(5052, 5038);
+						walkto(5035, 5027);
+						break;
+			case "heal":		walkto(5075, 5046);
+						walkto(5052, 5038);
+						walkto(5035, 5027);
+						break;
+			default:		bug("act 4 movetorevive from " + position);
+		}
+	}
+	position="revive";
+}
+
+function movetostash()
+{
+	var text = "Walking to stash";
+	me.overhead(text);
+	if (me.act == 3) {
+		switch (position) {
+			case "stash":		break;
+			case "start":		mbm_WalkPath(Path_S2C, text);
+						walkto(5133, 5094);
+						me.overhead(text);
+						walkto(5143, 5088);
+						me.overhead(text);
+						walkto(5148, 5066);
+						break;
+			case "portal":		walkto(5153, 5067);
+						break;
+			case "waypoint": 	break;
+			case "repair":		mbm_WalkPath(Path_Hratli2R, text);
+						walkto(5143, 5088);
+						break;
+			case "revive":		mbm_WalkPath(Path_Asheara2V, text);
+						walkto(5133, 5094);
+						me.overhead(text);
+						walkto(5143, 5088);
+						me.overhead(text);
+						walkto(5148, 5066);
+						break;
+			case "heal":		walkto(5133, 5094);
+						me.overhead(text);
+						walkto(5143, 5088);
+						me.overhead(text);
+						walkto(5148, 5066);
+						break;
+			default:		bug("act 3 movetostash from " + position);
+		}
+	} else {
+		switch (position) {
+			case "stash":		break;
+			case "start":		walkto(5034, 5036);
+						break;
+			case "waypoint": 	walkto(5035, 5027);
+						break;
+			case "revive":		break;
+			case "repair":		walkto(5075, 5042);
+						walkto(5052, 5038);
+						walkto(5034, 5036);
+						break;
+			case "heal":		walkto(5075, 5046);
+						walkto(5052, 5038);
+						walkto(5034, 5036);
+						break;
+			default:		bug("act 4 movetostash from " + position);
+		}
+	}
+	position="stash";
+}
+
+function movetowaypoint()
+{
+	var text = "Heading to durance";
+	me.overhead(text);
+	if (me.act == 3) {
+		switch (position) {
+			case "waypoint":	break;
+			case "start": 		mbm_WalkPath(Path_S2C, text);
+						walkto(5143, 5088);
+						me.overhead(text);
+						if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5148, 5077);
+						me.overhead(text);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5153, 5064);
+						me.overhead(text);
+//						walkto(5154, 5061);
+						break;
+			case "heal":		walkto(5143, 5088);
+						if (esp) mbm_FastCast(ENERGYSHIELD);
+						me.overhead(text);
+						walkto(5148, 5077);
+						if (asp != "none") mbm_FastCast(asp);
+						me.overhead(text);
+						walkto(5153, 5064);
+						break;
+			case "stash":		if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5152, 5055);
+						me.overhead(text);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5152, 5054);
+						me.overhead(text);
+						break;
+			case "repair":		mbm_WalkPath(Path_Hratli2R, text);
+						walkto(5158, 5077);
+						me.overhead(text);
+						if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5158, 5069);
+						me.overhead(text);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5158, 5064);
+						break;
+			case "revive":		mbm_WalkPath(Path_Asheara2V, text);
+						walkto(5142, 5087);
+						me.overhead(text);
+						if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5148, 5077);
+						me.overhead(text);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5153, 5064);
+						break;
+			default:		bug("act 3 movetowaypoint from " + position);
+						break;
+		}
+	} else {
+		switch(position) {
+			case "waypoint":	break;
+			case "start":		if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5046, 5036);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5046, 5030);
+						break;
+			case "heal":		walkto(5076, 5047);
+						walkto(5061, 5039);
+						if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5051, 5034);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5048, 5029);
+						break;
+			case "repair":		walkto(5077, 5042);
+						walkto(5063, 5039);
+						if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5051, 5034);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5048, 5029);
+						break;
+			case "revive":		if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5028, 5024);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5037, 5028);
+						break;
+			case "stash":		walkto(5035, 5037);
+						if (esp) mbm_FastCast(ENERGYSHIELD);	
+						walkto(5039, 5031);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5042, 5027);
+						break;
+			default:		bug("act 4 movetowaypoint from " + position);
+						break;
+		}
+	}
+	position="waypoint";
+}
+
+function movetoportal()
+{
+	me.overhead("Walking to portal");
+	
+	if (me.act == 3) {
+		switch (position) {
+			case "heal":		walkto(5132, 5091);
+						walkto(5143, 5088);
+						if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5149, 5082);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5153, 5076);
+						break;
+			case "stash":		if (esp) mbm_FastCast(ENERGYSHIELD);
+						walkto(5153, 5067);
+						if (asp != "none") mbm_FastCast(asp);
+						walkto(5156, 5070);
+						break;
+			default:		bug("act 3 movetoportal from " + position);
+						break;
+		}
+	} else {
+		bug("act 4 movetoportal from " + position);
+	}
+	position="portal";
+}
+
+function DropCrap()
+{
+	dropall("isc", 100, "Identify Scroll");
+}
+
+
+function mbm_ItemCost(itemcode)
+{
+	switch (itemcode) {
+		case "key": return 45;
+		case "isc": return 80;
+		case "tsc": return 90;
+		case "tbk": return 360;
+		case "hp5": return 500;
+		case "hp4": return 100;
+		default: bug("Unknown item cost for " + itemcode);
+			return 0;
+	}
+}
+
+function mbm_DoHealer()
+{
+	var needshop;
+
+	switch (me.act) {
+		case 3: healname = ORMUS; break;
+		case 4: healname = JAMELLA; break;
+		default: mbm_abortmessage("Where are you? Act " + me.act + "? What the hell?"); break;
+	}
+	
+//	print("heal");
+//	delay(100);
+	mbm_checkheal();
+//	print("belt");
+//	delay(100);
+	mbm_checkbelt();
+//	print("tomes");
+//	delay(100);
+	mbm_checktomes();
+//	print("keys");
+//	delay(100);
+	if (UberChest) mbm_checkkeys(1);
+//	print("inventory");
+//	delay(100);
+	mbm_FindUnidItem();
+	mbm_CheckInvSpace();
+
+//	print("shop");
+	if (IsChickening) delay(100);
+	needshop = (ShopItOn && Visits[healname] && rnd(0,100) < Visits[healname]);
+
+//	print("sell");
+	if (MoneyMaker) mbm_checksell();
+	
+	if (Uniditem && FullINV && !needsell) {
+		print("ÿc1Warning: My inventory is full, I can't buy an identify scroll");
+		Uniditem = false;
+	} else if (Uniditem && !needsell && mbm_MyGold() < mbm_ItemCost("isc")) {
+		print("Not enough gold to buy an identify scroll! Cool!");
+		Uniditem = false;
+	}
+	
+	if (needtptome && !(Uniditem || needsell) && !mbm_Find2By1FreeSpaceForTome()) {
+		print("Not enough space for a TP tome! Sorry.");
+		needtptome = false;
+	} if (needtptome && !(Uniditem || needsell) && mbm_MyGold() < mbm_ItemCost("tbk")) {
+		print("Not enough gold for a TP tome. Nice.");
+		needtptome = false;
+	} else if (needtps && !(Uniditem || needsell) && mbm_MyGold() < mbm_ItemCost("tsc")) {
+		print("Not enough gold for a TP scroll. Sweet.");
+		needtps = false;
+	} 
+	if (needkeys && !(Uniditem || needsell) && mbm_MyGold() < mbm_ItemCost("key")) {
+		print("Not enough gold to buy keys. Nice.");
+		needkeys = false;
+	} 
+	if (needshop && !(Uniditem || needsell) && mbm_MyGold() < MinShopGold) {
+		print("Not enough gold for shopping.");
+		needshop = false;
+	} 
+	if (needpotions && !(Uniditem || needsell) && mbm_MyGold() < mbm_ItemCost(BuyPotion)) {
+		print("Not enough gold for any healing potions. Not good.");
+		needpotions = false;
+	}
+
+	if (Uniditem || needheal || needtps || needtptome || needkeys || needshop || needpotions || needsell) {
+		movetohealer();
+		mbm_NPCinteract(healname);
+		
+		// Sometimes buys extra potions if belt size & potion buy amounts configured badly
+		drinkall(BuyPotion, 100, mbm_potname(BuyPotion));
+	}
+}
+
+function mbm_DoRepair()
+{
+	var needshop;
+	
+	needshop = (ShopItOn && Visits[repairname] && rnd(0,100) < Visits[repairname]);
+	
+	verbose_checkrepair();
+	if (UberChest) mbm_checkkeys(0);
+	if (needkeys && mbm_MyGold() < 35) {
+		print("Not enough gold to buy keys. Nice.");
+		needkeys = false;
+	}
+	if (needshop && mbm_MyGold() < MinShopGold) {
+		print("Not enough gold for shopping.");
+		needshop = false;
+	}
+	if (needrepair || needkeys || needshop) {
+		movetorepair();
+		mbm_NPCinteract(repairname);
+	}
+}
+
+function mbm_DoRevive()
+{
+	var needshop;
+	
+	needshop = (ShopItOn && me.act == 3 && Visits[ASHEARA] && rnd(0,100) < Visits[ASHEARA]);
+
+	// Sometimes merc names can be buggy if we are too quick, dont know if its always
+	// the case for the new cores but I'm too lazy to re-test this
+	if (UseMerc && position == "start") {
+		delay(1000);
+	}
+	if (needshop && mbm_MyGold() < MinShopGold) {
+		print("Not enough gold to shop");
+		needshop = false;
+	}
+	
+	verbose_checkmerc();
+	if (needrevive || needshop) {
+		movetorevive();
+		mbm_NPCinteract(revivename);
+	}
+
+}
+
+function mbm_DoStash()
+{
+	DropCrap();
+
+	// print("Checking inventory..");
+	mbm_checkinventory(true);
+	if (needstash || Niceitem)
+	{
+		movetostash();
+		
+		mbm_NPCinteract(STASH);
+	}
+}
+
+function prewaypointmanager()
+{
+	mbm_DoHealer();
+	mbm_DoRepair();
+	mbm_DoRevive();
+	mbm_DoStash();
+
+	mbm_TimeToKill();
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Other Functions
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+function mbm_SnagIt(radius)
+{
+	print("Activating SnagIt!");
+
+	getINI(SnagFile);
+	snagrad = radius ? radius : NormalSnagRadius;
+	DoDel(SnagDelay);
+	if (!SnagIt(SnagFile)) {
+		var tome = mbm_LocateTPTome();
+		if (tome) {
+			if (!mbm_SpawnTP()) {
+				bug("Error creating town portal on full inventory");
+				return;
+			}
+			
+			if (!mbm_TakeTP()) {
+				bug("Error taking town portal on full inventory");
+				return;
+			}
+
+			position = "portal";	
+			mbm_DoStash();
+			
+			movetoportal();
+			
+			if (!mbm_TakeTP()) {
+				bug("Error returning through TP on full inventory");
+				return;
+			}
+			
+			if (!Stashed) {
+				return;
+			} else {			
+				mbm_SnagIt(radius);
+			}
+		}
+	}
+}
+
+function premephmanager()
+{
+	if (DuranceThreeWait) {
+		mbm_Recharge();
+	}
+	
+	delay(me.ping);
+
+	// Check for we're on level 3
+	if (c_AreaNames[me.area] == "Durance of Hate 2") {
+		warn("We seem to have messed up .. trying stairs again");
+		mbm_TakeStairs();
+	}
+	
+
+	sorccheckprecasts();	
+}
+
+/*ææææææææææææææææææææææææææææ
+Main Switchboard
+ææææææææææææææææææææææææææææ*/
+
+function mbm_Init()
+{
+//	position="repair";
+//	movetowaypoint();
+	
+	mbm_CheckVersion();
+
+	mbm_LoadRun();
+	credits();
+	
+	mbm_print("------------------------------------------------");
+	mbm_print("Starting game number " + l_total);
+	mbm_print("------------------------------------------------");
+	
+	if (begingamedelay > 0)
+	{
+		print("Waiting " + (parseInt(begingamedelay / 1000)) + " seconds for initialization...");
+		delay(begingamedelay);
+	}
+
+	// Count runs
+	mbm_plus_runs(MEPHISTO);
+	
+	//if (debuglevel > 0) initdebuglog();
+
+	clearcursor();
+	checkclass();
+
+	mbm_InitWeaponSwitch();
+
+	if (me.gametype == c_GameType_Classic) {
+		print("D2 Classic Detected!");
+		StashHeight = 4;
+		if (!SkipUberChest) UberChest = true;
+	}
+
+	// Autodetect buy potion type
+	if (me.diff == 2) {
+	} else if (me.diff == 1) {
+		print("Nightmare difficulty detected!");
+	} else {
+		print("Normal difficulty detected!");
+	}
+	
+	mbm_AutoPotions();
+
+	DropCrap();
+
+	managepotions();
+	calchealthmana();
+
+	// print("Checking skills");
+	mbm_SorcSetSkills();
+
+}
+
+// Handle activity in town
+function mbm_DoTown()
+{
+	corpsecollect();
+
+	// Before waypoint management
+	checkact();
+	prewaypointmanager();
+
+	// Attempt to take waypoint
+	movetowaypoint();
+}
+
+// Handle durance two pathing
+function mbm_DoDuranceTwo()
+{
+	sorccheckprecasts();
+	teleporttodurancethree();
+}
+
+// Handle attacking meph
+function mbm_DoDuranceThree()
+{
+	premephmanager();	
+
+	teleporttomeph();
+
+	mbm_SorcAttack();
+}
+
+function mbm_OpenUberChest()
+{
+	print("Opening uber chest");
+
+	mbm_teleportto(UberChestPos.x, UberChestPos.y);
+		
+	// Locate the uber-chest
+	var chest = getUnit(2);
+	if (chest) do {
+		if ((chest.classid == 183 || chest.classid == 181) && chest.x == 17513 && chest.y == 8063) {
+			if (!mbm_Cast(TELEKINESIS, right_hand, chest)) {
+				bug("Failed to cast telekinesis on the uberchest");
+				return false;
+			}
+			
+			mbm_teleportto(chest.x + 2, chest.y);
+			
+			for (var i = 0; i < 10; i++) {
+				delay(UberChestTimeout / 10);
+				if (chest.mode == 2)
+					break;
+			}
+			
+			if (chest.mode != 2) {
+				bug("Timeout opening uber chest");
+				return false;
+			}
+			
+			GoldDisabled = true;
+			mbm_SnagIt();
+			GoldDisabled = false;
+			
+			return true;
+		}
+			
+	} while (chest.getNext());
+	
+	bug("Uber chest not detected");
+	return false;
+}
+
+function blarg(a, b)
+{
+//	if (a == "asdf") print("asdf");
+//	if (b == 100) print(100);
+//	print(a + b);
+}
+
+
+function mbm_ItemEval(item, condition)
+{
+	var newitem = new Object();
+	
+	newitem.quality = item.quality;
+	newitem.itemclass = item.code == "rin" ? 0 : item.itemclass;
+	newitem.code = item.code;
+	newitem.name = item.name;
+	
+//	mbm_print("evaled: " + item.eval(condition));
+//	mbm_print("quality: " + item.quality + " itemclass: " + item.itemclass);
+	return (newitem.eval(condition));
+}
+
+function mbm_IsMoneyItem(item)
+{
+	var condition;
+	
+	// Emergency check for charms
+	if (item.itemtype >= c_ItemType_SmallCharm && item.itemtype <= c_ItemType_LargeCharm)
+		return false;
+	
+//	if (!MoneyCondition) 
+	condition = PreparseEvalString(MoneyMakerTest);
+//	mbm_print("Eval string: " + condition);
+
+//	if (MoneyCondition == null) {
+//		bug("error parsing money maker eval string");
+//	}
+	
+	blarg(item.name, item.quality);
+	
+	if (!CheckItem(item, SnagFile)) {
+		if (mbm_ItemEval(item, condition)) {
+			mbm_print("The " + itemQual[item.quality] + " " + item.name + " *IS* a money item!!");
+//			print("true");
+			return true;
+		} else {
+			mbm_print("The " + itemQual[item.quality] +  " " + item.name + " is not money");
+		}
+	} else {
+		mbm_print("The " + itemQual[item.quality] +  " " + item.name + " is not money");
+	}
+
+//	print("false");
+	return false;
+}
+
+function mbm_GetMoneyItems()
+{
+	var pickitem;
+	var range;
+	var MoneyItemRange = 15;
+	var cnt = 0;
+	
+	pickitem = getUnit(4);
+	if (pickitem) do {
+		range = calcrange(pickitem.x, pickitem.y);
+		if ((pickitem.mode==c_UnitMode_Item_OnGround || pickitem.mode == c_UnitMode_Item_BeingDropped) && !pickitem.getParent() && range <= MoneyItemRange) {
+			if (mbm_IsMoneyItem(pickitem)) {
+				if (mbm_Pickup(pickitem)) {
+					// Print success message
+					cnt++;
+				} else {
+					// Print failure message
+				}
+			}
+		}
+	} while (pickitem.getNext());
+	
+	if (cnt > 1) print("ÿc;MoneyMaker: Picked up " + cnt + " ignored items to sell for cash");
+	else if (cnt == 1) print("ÿc;MoneyMaker: Picked up an ignored item to sell for cash");
+}
+
+// Handle everything after killing meph
+function mbm_PostMephKill()
+{
+	if (taunts) print("ÿc4Mephistoÿc@: Aaaaaaarrrgghh...!!!");
+	me.overhead("pwnd!!!");
+
+	// me.overhead("Porting to Meph's" + target.name + "'s body");
+	mbm_teleportto(target.x,target.y);
+	mbm_SnagIt();
+
+	if (usepotions && autopotionpickup) pickuppotions();
+	
+	if (UberChest) {
+		mbm_OpenUberChest();
+	}
+
+	if (MoneyMaker && !mbm_MaxedGold()) {
+		mbm_GetMoneyItems();
+	}
+
+	print("ÿc1Run complete");
+
+	if (GoToActFour)
+		takeactfourportal();
+
+	mbm_plus_kills("total");
+}
+
+function main()
+{
+	mbm_Init();
+
+	// Load pwnlifewatch.d2j
+	load("tools/mephlifewatch.d2j");
+
+	switch (me.area) {
+		case 1:
+		case 40:
+		case 75:
+		case 103:
+		case 109:	mbm_DoTown();
+				TakeWaypoint(c_WaypointIDs[2][8], 3);
+		case 101:	mbm_DoDuranceTwo();
+		case 102:	mbm_DoDuranceThree();
+				break;
+		default:	print("Unknown area!");
+				delay(1000);
+				print("I don't know what to do");
+				delay(2000);
+				mbm_abortmessage("Unknown area");
+				break;
+	}
+
+	mbm_PostMephKill();
+	mbm_quitmessage();
+}
+
+
+function Dist(x1, y1, x2, y2)
+{
+	var d = ((x1 - x2) * (x1 - x2)) + ((y1 - y2) * (y1 - y2));
+	return Math.floor(Math.sqrt(d));
+}
+// Meph cold ball:
+// ClassID:276
+// ClassID:367
+
+// Room 768 appears to be the problem room
